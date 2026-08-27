@@ -6,9 +6,11 @@ Aplicación de escritorio en Flet para crear y actualizar productos simples de W
 
 La aplicación se distribuye como instalador, por lo que la persona cliente no necesita instalar Python. Antes de crear una entrega, cambia de forma coordinada la versión de `pyproject.toml` y `woo_uploader/version.py`.
 
-Desde un equipo Windows, instala las dependencias del proyecto e [Inno Setup](https://jrsoftware.org/isinfo.php). Después ejecuta en PowerShell:
+Desde un equipo Windows, instala Python 3.11 o posterior e [Inno Setup](https://jrsoftware.org/isinfo.php). Después ejecuta en PowerShell:
 
 ```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[build]"
 .\scripts\build_instalador_windows.ps1
 ```
 
@@ -16,11 +18,35 @@ El instalador se genera en `installer\output`. La primera versión se puede comp
 
 ## Desarrollo y validación
 
+Se necesita Python 3.11 o posterior. Cree un entorno virtual e instale las
+dependencias de desarrollo antes de ejecutar la aplicación o las pruebas.
+
+### Linux
+
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e '.[dev]'
 .venv/bin/flet run main.py
 .venv/bin/pytest -q
+```
+
+### Windows (PowerShell)
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+py -m pip install -e '.[dev]'
+flet run main.py
+pytest -q
+```
+
+Si la política de ejecución de PowerShell bloquea la activación del entorno,
+puede omitirla y llamar directamente a sus ejecutables:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e '.[dev]'
+.\.venv\Scripts\flet.exe run main.py
+.\.venv\Scripts\pytest.exe -q
 ```
 
 En **Configuración**, indique la URL de la tienda y las claves REST de WooCommerce. Para subir imágenes locales, WordPress debe aceptar esas credenciales en su endpoint de medios; si no lo hace, rellene opcionalmente el usuario y contraseña de aplicación de WordPress.
