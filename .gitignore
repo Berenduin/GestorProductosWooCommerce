@@ -1,0 +1,19 @@
+# Entorno y cachés de Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Artefactos de compilación y distribución
+build/
+dist/
+*.egg-info/
+
+# Configuración sensible o local
+.env
+.env.*
+settings.json
+
+# Informes generados al subir lotes
+resultado_subida_lote.csv
+resultado_importacion.csv

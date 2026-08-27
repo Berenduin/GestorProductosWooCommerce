@@ -1,0 +1,13 @@
+[project]
+name = "woo-product-uploader"
+version = "0.1.0"
+description = "Desktop uploader for simple WooCommerce products"
+requires-python = ">=3.11"
+dependencies = ["flet>=0.25,<0.26", "requests>=2.31", "openpyxl>=3.1", "keyring>=25.0", "platformdirs>=4.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
