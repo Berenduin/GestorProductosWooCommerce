@@ -23,7 +23,7 @@ FIELD_LABELS = {
     "backorders": "Permitir pedidos bajo demanda",
     "low_stock_amount": "Umbral de pocas existencias",
     "sold_individually": "Vender una unidad por pedido (sí/no)",
-    "categories": "Categorías * (separadas por coma)",
+    "categories": "Categoría *",
     "tags": "Etiquetas (separadas por coma)",
     "weight": "Peso",
     "length": "Largo",
@@ -90,6 +90,8 @@ def validate_product(
             result.errors.append(f"{FIELD_LABELS[key]} debe ser un número.")
     if values.get("stock_quantity") and not values["stock_quantity"].replace("-", "", 1).isdigit():
         result.errors.append("La cantidad de stock debe ser un número entero.")
+    if values.get("categories") and "," in values["categories"]:
+        result.errors.append("La categoría debe contener un único valor.")
     if values.get("status") and values["status"] not in {"draft", "publish"}:
         result.errors.append("El estado debe ser draft o publish.")
     if values.get("catalog_visibility") and values["catalog_visibility"] not in {"visible", "catalog", "search", "hidden"}:
@@ -132,7 +134,7 @@ def to_woo_payload(product: ProductInput, default_status: str) -> dict[str, Any]
     if dimensions:
         payload["dimensions"] = dimensions
     if values.get("categories"):
-        payload["categories"] = split_names(values["categories"])
+        payload["categories"] = [{"name": values["categories"]}]
     if values.get("tags"):
         payload["tags"] = split_names(values["tags"])
     return payload
