@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import flet as ft
 
 from ..config import Settings
+from ..version import APP_NAME, APP_VERSION
 from .components import modern_dropdown, modern_text_field
 from .theme import PURPLE, WHITE
 
@@ -104,4 +105,18 @@ def build_settings_view(app: AppController, selected_tab: int = 0) -> list[ft.Co
         url, consumer_key, consumer_secret, wp_user, wp_pass, default_status,
         ft.Row([ft.ElevatedButton("Guardar conexión", on_click=save_connection), ft.OutlinedButton("Probar conexión", on_click=test)]),
     ], scroll=ft.ScrollMode.AUTO)
-    return [ft.Text("Configuración", size=26, weight=ft.FontWeight.BOLD, color=PURPLE), ft.Tabs(selected_index=selected_tab, expand=True, tabs=[ft.Tab(text="Categorías", content=categories_tab), ft.Tab(text="Conexión", content=connection_tab)]), app.status]
+    updates_tab = ft.Column([
+        ft.Text("Actualizaciones", size=20, weight=ft.FontWeight.BOLD, color=PURPLE),
+        ft.Text(f"{APP_NAME} versión {APP_VERSION}", weight=ft.FontWeight.BOLD),
+        ft.Text("En futuras versiones, este apartado avisará cuando haya una actualización disponible y permitirá descargar el instalador de forma segura.", color="#665B5E"),
+        ft.Container(
+            ft.Row([
+                ft.Icon(ft.Icons.INFO_OUTLINE, color=PURPLE),
+                ft.Text("La comprobación automática de actualizaciones se activará cuando se publique la primera versión de distribución.", expand=True),
+            ], vertical_alignment=ft.CrossAxisAlignment.START),
+            bgcolor="#FBF7F8",
+            border_radius=8,
+            padding=12,
+        ),
+    ], scroll=ft.ScrollMode.AUTO)
+    return [ft.Text("Configuración", size=26, weight=ft.FontWeight.BOLD, color=PURPLE), ft.Tabs(selected_index=selected_tab, expand=True, tabs=[ft.Tab(text="Categorías", content=categories_tab), ft.Tab(text="Conexión", content=connection_tab), ft.Tab(text="Actualizaciones", content=updates_tab)]), app.status]

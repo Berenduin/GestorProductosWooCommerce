@@ -1,6 +1,18 @@
-# Subidor de productos WooCommerce
+# Gestor de productos · El Baúl de la Tuna
 
 Aplicación de escritorio en Flet para crear y actualizar productos simples de WooCommerce de uno en uno o desde un Excel.
+
+## Distribución para Windows
+
+La aplicación se distribuye como instalador, por lo que la persona cliente no necesita instalar Python. Antes de crear una entrega, cambia de forma coordinada la versión de `pyproject.toml` y `woo_uploader/version.py`.
+
+Desde un equipo Windows, instala las dependencias del proyecto e [Inno Setup](https://jrsoftware.org/isinfo.php). Después ejecuta en PowerShell:
+
+```powershell
+.\scripts\build_instalador_windows.ps1
+```
+
+El instalador se genera en `installer\output`. La primera versión se puede compartir mediante un enlace de descarga; no conviene adjuntar ejecutables directamente por correo. El apartado **Configuración → Actualizaciones** muestra la versión instalada y queda preparado para incorporar la comprobación y descarga de futuras Releases.
 
 ## Desarrollo y validación
 

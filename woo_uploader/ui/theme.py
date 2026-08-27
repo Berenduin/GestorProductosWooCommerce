@@ -10,7 +10,7 @@ BLACK = "#1F1F1F"
 
 
 def configure_page(page: ft.Page) -> None:
-    page.title = "Subidor WooCommerce"
+    page.title = "Gestor de productos · El Baúl de la Tuna"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.bgcolor = LIGHT_GRAY
     page.theme = ft.Theme(

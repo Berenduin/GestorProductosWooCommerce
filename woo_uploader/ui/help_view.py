@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 WHATSAPP_SUPPORT_URL = "https://wa.me/34673120842?text=" + quote(
-    "Hola, necesito ayuda con Subidor WooCommerce.\n\n"
+    "Hola, necesito ayuda con Gestor de productos · El Baúl de la Tuna.\n\n"
     "Estoy intentando: \n"
     "El mensaje de error es: \n"
 )
@@ -37,12 +37,12 @@ def build_help_view(app: AppController) -> list[ft.Control]:
     connection_steps = [
         _guide_step("1", "Abre el panel de WordPress", "Entra en la administración de tu tienda con una cuenta que pueda gestionar WooCommerce."),
         _guide_step("2", "Crea las claves de WooCommerce", "Ve a WooCommerce → Ajustes → Avanzado → API REST y pulsa «Añadir clave» o «Crear una clave API»."),
-        _guide_step("3", "Elige los permisos adecuados", "Pon una descripción como «Subidor de productos», elige un usuario con permisos para gestionar productos y selecciona «Lectura/Escritura». Después genera la clave."),
+        _guide_step("3", "Elige los permisos adecuados", "Pon una descripción como «Gestor de productos», elige un usuario con permisos para gestionar productos y selecciona «Lectura/Escritura». Después genera la clave."),
         _guide_step("4", "Copia los dos valores", "WooCommerce mostrará Consumer Key y Consumer Secret. Copia ambos antes de cerrar la pantalla: el secreto solo se muestra una vez."),
     ]
     application_password_steps = [
         _guide_step("1", "Usa este apartado solo si subes fotos", "El usuario y la contraseña de aplicación son opcionales. Se usan para enviar imágenes a la biblioteca de medios de WordPress."),
-        _guide_step("2", "Crea una contraseña de aplicación", "En WordPress ve a Usuarios → Perfil, busca «Contraseñas de aplicación», escribe «Subidor WooCommerce» y genera una nueva."),
+        _guide_step("2", "Crea una contraseña de aplicación", "En WordPress ve a Usuarios → Perfil, busca «Contraseñas de aplicación», escribe «Gestor de productos» y genera una nueva."),
         _guide_step("3", "Introduce el usuario y la contraseña generada", "Usa tu nombre de usuario de WordPress y esa contraseña especial; no introduzcas tu contraseña habitual de WordPress."),
     ]
     return [
