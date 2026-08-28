@@ -78,6 +78,37 @@ class WooCommerceClient:
         products = self._request("GET", "/wp-json/wc/v3/products", params={"sku": sku, "per_page": 1})
         return products[0] if products else None
 
+    def _category_id(self, category_name: str) -> int:
+        categories = self._request(
+            "GET",
+            "/wp-json/wc/v3/products/categories",
+            params={"search": category_name, "per_page": 100, "hide_empty": False},
+        )
+        for category in categories:
+            if str(category.get("name", "")).casefold() == category_name.casefold():
+                return int(category["id"])
+        raise WooCommerceError(f"No se encontró la categoría «{category_name}» en WooCommerce.")
+
+    def list_published_products(self, category_name: str | None = None) -> list[dict[str, Any]]:
+        """Devuelve los productos publicados de una categoría, recorriendo la paginación REST."""
+        products: list[dict[str, Any]] = []
+        page = 1
+        per_page = 100
+        category_id = self._category_id(category_name) if category_name else None
+        while True:
+            params: dict[str, Any] = {"status": "publish", "per_page": per_page, "page": page}
+            if category_id is not None:
+                params["category"] = category_id
+            batch = self._request(
+                "GET",
+                "/wp-json/wc/v3/products",
+                params=params,
+            )
+            if not batch:
+                return products
+            products.extend(batch)
+            page += 1
+
     def upload_image(self, path: Path) -> str:
         headers = {"Content-Disposition": f'attachment; filename="{path.name}"', "Content-Type": "application/octet-stream"}
         try:
