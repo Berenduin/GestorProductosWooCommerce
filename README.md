@@ -73,7 +73,7 @@ Las vistas pueden convertir controles en `ProductInput`, validar mediante el dom
 
 ### Producto individual
 
-1. La vista reúne y valida los campos obligatorios: nombre, SKU, precio y una única categoría. El alto es opcional; las etiquetas sí pueden separarse por comas.
+1. La vista reúne y valida los campos obligatorios: nombre, precio y una única categoría. El SKU y el alto son opcionales; las etiquetas sí pueden separarse por comas.
 2. El servicio consulta el SKU. Si existe, la interfaz ofrece actualizar u omitir.
 3. El servicio crea o actualiza el producto y devuelve un resultado tipado para que la vista lo presente.
 

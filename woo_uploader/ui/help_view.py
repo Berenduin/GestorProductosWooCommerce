@@ -49,7 +49,7 @@ def build_help_view(app: AppController) -> list[ft.Control]:
         ft.Text("Ayuda", size=26, weight=ft.FontWeight.BOLD, color=PURPLE),
         ft.Text("Guía sencilla para preparar la conexión y subir productos con seguridad.", color="#665B5E"),
         section("Subir un producto", "Para añadir o actualizar un producto de uno en uno.", [
-            _guide_step("1", "Completa los datos obligatorios", "Escribe nombre, SKU, precio y una categoría. El alto y el resto de medidas son opcionales."),
+            _guide_step("1", "Completa los datos obligatorios", "Escribe nombre, precio y una categoría. El SKU, el alto y el resto de medidas son opcionales."),
             _guide_step("2", "Añade etiquetas e imagen si las necesitas", "Las etiquetas pueden separarse por comas. La imagen puede ser JPG, JPEG, PNG o WEBP."),
             _guide_step("3", "Revisa y confirma", "La aplicación mostrará un resumen. Si ese SKU ya existe, podrás actualizarlo o dejarlo sin cambios."),
             _guide_step("4", "Espera al mensaje final", "Mientras se sube el producto aparecerá una ventana de progreso. No cierres ni uses la aplicación hasta que termine."),

@@ -6,16 +6,10 @@ from typing import Any
 
 import flet as ft
 
+from ..models import LOCATION_TAXONOMIES
 from ..woocommerce import WooCommerceError
 from .components import primary_button, section
 from .theme import PURPLE
-
-LOCATION_TAXONOMIES = (
-    ("ebdlt_pais", "País"),
-    ("ebdlt_region", "Comunidad o estado"),
-    ("ebdlt_ciudad", "Ciudad"),
-)
-
 
 def _category_names(product: dict[str, Any]) -> list[str]:
     names = [str(category.get("name", "")).strip() for category in product.get("categories", [])]

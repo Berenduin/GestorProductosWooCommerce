@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import flet as ft
 
-from ..models import FIELD_LABELS, ProductInput, validate_product
+from ..models import FIELD_LABELS, ProductInput, capitalize_initial, is_shield_category, validate_product
 from ..services.uploads import DuplicateAction, ProductUploadService
 from .components import acknowledgement_dialog, modern_dropdown, modern_text_field, primary_button, section
 from .theme import PURPLE, WHITE
@@ -14,13 +14,13 @@ if TYPE_CHECKING:
     from ..app_controller import AppController
 
 
-REQUIRED_FIELDS = ("name", "sku", "regular_price", "categories")
+REQUIRED_FIELDS = ("name", "regular_price", "categories")
 
 
 def build_single_product_view(app: AppController) -> ft.Control:
     fields = {
         "name": modern_text_field("Nombre *", "Ej.: Bandurria artesanal", ft.Icons.INVENTORY_2_OUTLINED),
-        "sku": modern_text_field("SKU *", "Ej.: BAND-001", ft.Icons.SELL_OUTLINED),
+        "sku": modern_text_field("SKU", "Opcional. Ej.: BAND-001", ft.Icons.SELL_OUTLINED),
         "featured": modern_dropdown(label="Producto destacado", value="no", prefix_icon=ft.Icons.STAR_OUTLINE, options=[ft.dropdown.Option("no", "No"), ft.dropdown.Option("yes", "Sí")]),
         "regular_price": modern_text_field("Precio *", "Ej.: 24,95", ft.Icons.EURO_OUTLINED),
         "sale_price": modern_text_field("Precio rebajado", "Ej.: 19,95", ft.Icons.LOCAL_OFFER_OUTLINED),
@@ -28,6 +28,9 @@ def build_single_product_view(app: AppController) -> ft.Control:
         "stock_quantity": modern_text_field("Stock", "Ej.: 12", ft.Icons.WAREHOUSE_OUTLINED),
         "stock_status": modern_dropdown(label="Estado de existencias", value="instock", prefix_icon=ft.Icons.INVENTORY_2_OUTLINED, options=[ft.dropdown.Option("instock", "En stock"), ft.dropdown.Option("onbackorder", "Bajo pedido / a medida")]),
         "categories": modern_dropdown(label="Categoría *", hint_text="Elige una categoría", prefix_icon=ft.Icons.CATEGORY_OUTLINED, options=[ft.dropdown.Option(category) for category in app.settings.categories]),
+        "ebdlt_pais": modern_text_field("País", "Ej.: España", ft.Icons.PUBLIC),
+        "ebdlt_region": modern_text_field("Comunidad o estado", "Ej.: Andalucía", ft.Icons.MAP_OUTLINED),
+        "ebdlt_ciudad": modern_text_field("Ciudad", "Ej.: Sevilla", ft.Icons.LOCATION_ON_OUTLINED),
         "tags": modern_text_field("Etiquetas (separadas por comas)", "Ej.: tuna, instrumento, madera", ft.Icons.LABEL_OUTLINED),
         "weight": modern_text_field("Peso [kg]", "Ej.: 0,85", ft.Icons.SCALE_OUTLINED),
         "length": modern_text_field("Largo [cm]", "Ej.: 65", ft.Icons.STRAIGHTEN_OUTLINED),
@@ -41,6 +44,27 @@ def build_single_product_view(app: AppController) -> ft.Control:
     image_preview = ft.Image(width=120, height=120, fit=ft.ImageFit.CONTAIN, visible=False)
     product_status = modern_dropdown(label="Publicación", value=app.settings.default_status, prefix_icon=ft.Icons.PUBLISH_OUTLINED, options=[ft.dropdown.Option("draft", "Guardar como borrador"), ft.dropdown.Option("publish", "Publicar ahora")])
     service = ProductUploadService(app.create_client)
+
+    def capitalize_location(event: ft.ControlEvent) -> None:
+        event.control.value = capitalize_initial(event.control.value)
+        event.control.update()
+
+    for key in ("ebdlt_pais", "ebdlt_region", "ebdlt_ciudad"):
+        fields[key].on_blur = capitalize_location
+
+    location_fields = ft.ResponsiveRow(
+        [ft.Container(fields[key], col={"sm": 12, "md": 4}) for key in ("ebdlt_pais", "ebdlt_region", "ebdlt_ciudad")],
+        visible=False,
+    )
+
+    def show_location_fields(event: ft.ControlEvent) -> None:
+        location_fields.visible = is_shield_category(event.control.value)
+        if not location_fields.visible:
+            for key in ("ebdlt_pais", "ebdlt_region", "ebdlt_ciudad"):
+                fields[key].value = ""
+        location_fields.update()
+
+    fields["categories"].on_change = show_location_fields
 
     def selected(event: ft.FilePickerResultEvent) -> None:
         if event.files:
@@ -105,8 +129,8 @@ def build_single_product_view(app: AppController) -> ft.Control:
         ft.Text("Todos los campos marcados con asterisco (*) son obligatorios.", color="#665B5E"),
         section("Producto", "Datos principales, contenido y presencia en el catálogo.", [ft.ResponsiveRow([ft.Container(fields["name"], col={"sm": 12, "md": 8}), ft.Container(fields["sku"], col={"sm": 12, "md": 4})]), fields["description"], fields["short_description"], ft.ResponsiveRow([ft.Container(fields["featured"], col={"sm": 12, "md": 6}), ft.Container(product_status, col={"sm": 12, "md": 6})]), ft.Row([primary_button("Elegir imagen", lambda _: app.single_image_picker.pick_files(allow_multiple=False, file_type=ft.FilePickerFileType.CUSTOM, allowed_extensions=["jpg", "jpeg", "png", "webp"]), ft.Icons.IMAGE_OUTLINED), image_text, image_preview])]),
         section("Precio", "Define el precio habitual y, si procede, una oferta.", [ft.ResponsiveRow([ft.Container(fields["regular_price"], col={"sm": 12, "md": 6}), ft.Container(fields["sale_price"], col={"sm": 12, "md": 6})])]),
+        section("Organización", "Elige la categoría. Al seleccionar Escudos podrás indicar su ubicación respetando la mayúscula inicial.", [fields["categories"], location_fields, fields["tags"]]),
         section("Inventario", "Controla existencias, productos bajo pedido y alertas.", [ft.ResponsiveRow([ft.Container(fields["manage_stock"], col={"sm": 12, "md": 4}), ft.Container(fields["stock_quantity"], col={"sm": 12, "md": 4}), ft.Container(fields["stock_status"], col={"sm": 12, "md": 4})])]),
         section("Envío", "Indica el peso y las dimensiones del producto.", [fields["weight"], ft.ResponsiveRow([ft.Container(fields[key], col={"sm": 4}) for key in ("length", "width", "height")])]),
-        section("Organización", "Clasifica el producto para facilitar su navegación y búsqueda.", [fields["categories"], fields["tags"]]),
         ft.Row([primary_button("Subir producto", lambda _: submit(), ft.Icons.UPLOAD, height=52)], alignment=ft.MainAxisAlignment.END),
     ], spacing=20, scroll=ft.ScrollMode.AUTO), padding=10)

@@ -9,6 +9,7 @@ ese endpoint. Añade el siguiente cambio al archivo principal del plugin **El Ba
 
 ```php
 add_filter( 'woocommerce_rest_prepare_product_object', array( __CLASS__, 'incluir_ubicacion_en_api' ), 10, 3 );
+add_action( 'woocommerce_rest_insert_product_object', array( __CLASS__, 'guardar_ubicacion_desde_api' ), 10, 3 );
 ```
 
 2. Dentro de la misma clase, añade este método:
@@ -25,7 +26,28 @@ public static function incluir_ubicacion_en_api( $response, $producto, $request 
 }
 ```
 
-Tras activar ese cambio, cada producto de `wc/v3/products` incluirá las claves
+3. Añade también este método. Permite que la aplicación asigne los términos al
+crear o actualizar un escudo y conserva intactas las taxonomías que no estén
+presentes en una petición:
+
+```php
+public static function guardar_ubicacion_desde_api( $producto, $request, $creando ) {
+	foreach ( array( 'ebdlt_pais', 'ebdlt_region', 'ebdlt_ciudad' ) as $taxonomia ) {
+		if ( ! $request->has_param( $taxonomia ) ) {
+			continue;
+		}
+		$valor = $request->get_param( $taxonomia );
+		$nombres = is_array( $valor ) ? $valor : array( $valor );
+		$nombres = array_values( array_filter( array_map( 'sanitize_text_field', $nombres ) ) );
+		wp_set_object_terms( $producto->get_id(), $nombres, $taxonomia, false );
+	}
+}
+```
+
+Tras activar esos cambios, cada producto de `wc/v3/products` incluirá las claves
 `ebdlt_pais`, `ebdlt_region` y `ebdlt_ciudad`. La pestaña **Escudos** de la
-aplicación mostrará las tres columnas; pulsa **Actualizar** una vez para renovar
-la caché de la sesión.
+aplicación mostrará las tres columnas y el formulario individual podrá escribir
+sus valores cuando se seleccione la categoría **Escudos**. La importación por
+lotes reconoce igualmente las columnas **País**, **Comunidad o estado** y
+**Ciudad** del Excel, pero solo las aplica a las filas de esa categoría. Pulsa
+**Actualizar** una vez para renovar la caché de la sesión.

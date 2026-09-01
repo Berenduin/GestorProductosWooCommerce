@@ -137,6 +137,7 @@ def build_bulk_import_view(app: AppController) -> ft.Control:
         ft.Text("Carga varios productos desde un Excel en tres pasos. El lote se valida antes de enviarlo; no se modificará la tienda hasta confirmar la subida.", color="#665B5E"),
         step_title("1", "Selecciona el archivo Excel", ft.Icons.DESCRIPTION_OUTLINED),
         ft.Text("El archivo debe tener formato .xlsx y la primera fila debe contener las cabeceras de los productos.", size=13, color="#665B5E"),
+        ft.Text("Para los escudos puedes incluir las columnas País, Comunidad o estado y Ciudad. Solo se aplicarán a las filas cuya categoría sea Escudos.", size=13, color="#665B5E"),
         ft.Row([
             primary_button("Seleccionar archivo Excel", lambda _: app.batch_excel_picker.pick_files(allow_multiple=False, file_type=ft.FilePickerFileType.CUSTOM, allowed_extensions=["xlsx"]), ft.Icons.UPLOAD_FILE, tooltip="Selecciona el Excel con los productos que quieres revisar"),
             file_label,

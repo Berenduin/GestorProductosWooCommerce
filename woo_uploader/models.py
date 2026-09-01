@@ -7,10 +7,17 @@ from typing import Any
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
+LOCATION_TAXONOMIES = (
+    ("ebdlt_pais", "País"),
+    ("ebdlt_region", "Comunidad o estado"),
+    ("ebdlt_ciudad", "Ciudad"),
+)
+LOCATION_TAXONOMY_KEYS = tuple(key for key, _ in LOCATION_TAXONOMIES)
+
 FIELD_LABELS = {
     "ignore": "Ignorar columna",
     "name": "Nombre *",
-    "sku": "SKU *",
+    "sku": "SKU",
     "regular_price": "Precio *",
     "sale_price": "Precio rebajado",
     "description": "Descripción",
@@ -24,6 +31,9 @@ FIELD_LABELS = {
     "low_stock_amount": "Umbral de pocas existencias",
     "sold_individually": "Vender una unidad por pedido (sí/no)",
     "categories": "Categoría *",
+    "ebdlt_pais": "País",
+    "ebdlt_region": "Comunidad o estado",
+    "ebdlt_ciudad": "Ciudad",
     "tags": "Etiquetas (separadas por coma)",
     "weight": "Peso",
     "length": "Largo",
@@ -62,6 +72,16 @@ def clean_value(value: Any) -> str:
     return "" if value is None else str(value).strip()
 
 
+def capitalize_initial(value: Any) -> str:
+    """Limpia un valor y escribe su primer carácter en mayúscula."""
+    cleaned = clean_value(value)
+    return cleaned[:1].upper() + cleaned[1:]
+
+
+def is_shield_category(value: Any) -> bool:
+    return clean_value(value).casefold() == "escudos"
+
+
 def split_names(value: Any) -> list[dict[str, str]]:
     return [{"name": part.strip()} for part in clean_value(value).split(",") if part.strip()]
 
@@ -76,6 +96,13 @@ def validate_product(
     required_fields: tuple[str, ...] = ("name",),
 ) -> ValidationResult:
     values = {key: clean_value(value) for key, value in product.values.items() if clean_value(value)}
+    if is_shield_category(values.get("categories")):
+        for key in LOCATION_TAXONOMY_KEYS:
+            if key in values:
+                values[key] = capitalize_initial(values[key])
+    else:
+        for key in LOCATION_TAXONOMY_KEYS:
+            values.pop(key, None)
     result = ValidationResult(ProductInput(values, product.image_path, product.row_number))
     for key in required_fields:
         if not values.get(key):
@@ -137,4 +164,7 @@ def to_woo_payload(product: ProductInput, default_status: str) -> dict[str, Any]
         payload["categories"] = [{"name": values["categories"]}]
     if values.get("tags"):
         payload["tags"] = split_names(values["tags"])
+    for key in LOCATION_TAXONOMY_KEYS:
+        if values.get(key):
+            payload[key] = [values[key]]
     return payload

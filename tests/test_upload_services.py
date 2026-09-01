@@ -19,7 +19,7 @@ class FakeClient:
         return self.existing.get(sku)
 
     def create_product(self, payload, image_path=None):
-        if payload["sku"] in self.fail_skus:
+        if payload.get("sku", "") in self.fail_skus:
             raise WooCommerceError("fallo remoto")
         self.created.append(payload)
         return {"id": 100 + len(self.created)}
@@ -54,6 +54,19 @@ def test_product_service_requires_a_decision_for_existing_sku() -> None:
         service.upload(valid_product("OLD").product, "draft")
 
 
+def test_product_service_creates_a_product_without_sku() -> None:
+    client = FakeClient()
+    product = validate_product(
+        ProductInput({"name": "Producto sin referencia", "regular_price": "10", "categories": "General"}),
+        required_fields=("name", "regular_price", "categories"),
+    ).product
+
+    result = ProductUploadService(lambda: client).upload(product, "draft")
+
+    assert result.outcome == "created"
+    assert "sku" not in client.created[0]
+
+
 def test_product_service_returns_remote_errors_as_a_typed_result() -> None:
     service = ProductUploadService(lambda: FakeClient(fail_skus={"FAIL"}))
     result = service.upload(valid_product("FAIL").product, "draft")
@@ -81,6 +94,26 @@ def test_batch_service_rejects_invalid_products_before_calling_client() -> None:
     with pytest.raises(ValueError, match="no válidos"):
         BatchUploadService(lambda: client).upload([invalid], "draft", {}, {})
     assert client.created == []
+
+
+def test_batch_service_sends_shield_location_taxonomies() -> None:
+    client = FakeClient()
+    shield = validate_product(ProductInput({
+        "name": "Escudo de Sevilla",
+        "sku": "ESC-1",
+        "regular_price": "20",
+        "categories": "Escudos",
+        "ebdlt_pais": "españa",
+        "ebdlt_region": "andalucía",
+        "ebdlt_ciudad": "sevilla",
+    }, row_number=2))
+
+    result = BatchUploadService(lambda: client).upload([shield], "draft", {}, {})
+
+    assert result.counts["created"] == 1
+    assert client.created[0]["ebdlt_pais"] == ["España"]
+    assert client.created[0]["ebdlt_region"] == ["Andalucía"]
+    assert client.created[0]["ebdlt_ciudad"] == ["Sevilla"]
 
 
 def test_batch_report_uses_historical_name_and_utf8_bom(tmp_path: Path) -> None:

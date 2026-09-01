@@ -2,7 +2,7 @@ from pathlib import Path
 
 from openpyxl import Workbook
 
-from woo_uploader.excel_import import build_products, find_image, infer_mapping, read_spreadsheet
+from woo_uploader.excel_import import Spreadsheet, build_products, find_image, infer_mapping, read_spreadsheet
 
 
 def test_reads_headers_maps_rows_and_finds_case_insensitive_image(tmp_path: Path) -> None:
@@ -34,12 +34,35 @@ def test_rejects_duplicate_headers(tmp_path: Path) -> None:
 
 
 def test_infer_mapping_recognizes_common_spanish_headers() -> None:
-    mapping = infer_mapping(["Referencia", "Título", "Precio", "Categorías", "Campo auxiliar"])
+    mapping = infer_mapping(["Referencia", "Título", "Precio", "Categorías", "País", "Comunidad o estado", "Ciudad", "Campo auxiliar"])
 
     assert mapping == {
         "Referencia": "sku",
         "Título": "name",
         "Precio": "regular_price",
         "Categorías": "categories",
+        "País": "ebdlt_pais",
+        "Comunidad o estado": "ebdlt_region",
+        "Ciudad": "ebdlt_ciudad",
         "Campo auxiliar": "ignore",
     }
+
+
+def test_batch_products_keep_location_only_for_shields() -> None:
+    spreadsheet = Spreadsheet(
+        headers=["Nombre", "Categoría", "País", "Comunidad", "Ciudad"],
+        rows=[
+            (2, {"Nombre": "Escudo", "Categoría": "Escudos", "País": "españa", "Comunidad": "andalucía", "Ciudad": "sevilla"}),
+            (3, {"Nombre": "Bandurria", "Categoría": "Instrumentos", "País": "españa", "Comunidad": "andalucía", "Ciudad": "sevilla"}),
+        ],
+    )
+    mapping = infer_mapping(spreadsheet.headers)
+
+    shields, instrument = build_products(spreadsheet, mapping)
+
+    assert shields.product.values["ebdlt_pais"] == "España"
+    assert shields.product.values["ebdlt_region"] == "Andalucía"
+    assert shields.product.values["ebdlt_ciudad"] == "Sevilla"
+    assert "ebdlt_pais" not in instrument.product.values
+    assert "ebdlt_region" not in instrument.product.values
+    assert "ebdlt_ciudad" not in instrument.product.values
