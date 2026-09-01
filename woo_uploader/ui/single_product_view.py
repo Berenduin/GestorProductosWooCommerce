@@ -15,18 +15,23 @@ if TYPE_CHECKING:
 
 
 REQUIRED_FIELDS = ("name", "regular_price", "categories")
+IN_STOCK = "instock"
+ON_BACKORDER = "onbackorder"
+
+
+def inventory_values(availability: str, quantity: str) -> dict[str, str]:
+    if availability == IN_STOCK:
+        return {"manage_stock": "yes", "stock_status": IN_STOCK, "stock_quantity": quantity}
+    return {"manage_stock": "no", "stock_status": ON_BACKORDER, "stock_quantity": ""}
 
 
 def build_single_product_view(app: AppController) -> ft.Control:
     fields = {
         "name": modern_text_field("Nombre *", "Ej.: Bandurria artesanal", ft.Icons.INVENTORY_2_OUTLINED),
         "sku": modern_text_field("SKU", "Opcional. Ej.: BAND-001", ft.Icons.SELL_OUTLINED),
-        "featured": modern_dropdown(label="Producto destacado", value="no", prefix_icon=ft.Icons.STAR_OUTLINE, options=[ft.dropdown.Option("no", "No"), ft.dropdown.Option("yes", "Sí")]),
         "regular_price": modern_text_field("Precio *", "Ej.: 24,95", ft.Icons.EURO_OUTLINED),
         "sale_price": modern_text_field("Precio rebajado", "Ej.: 19,95", ft.Icons.LOCAL_OFFER_OUTLINED),
-        "manage_stock": modern_dropdown(label="Gestionar cantidad de stock", value="yes", prefix_icon=ft.Icons.INVENTORY_OUTLINED, options=[ft.dropdown.Option("yes", "Sí"), ft.dropdown.Option("no", "No (productos bajo demanda)")]),
-        "stock_quantity": modern_text_field("Stock", "Ej.: 12", ft.Icons.WAREHOUSE_OUTLINED),
-        "stock_status": modern_dropdown(label="Estado de existencias", value="instock", prefix_icon=ft.Icons.INVENTORY_2_OUTLINED, options=[ft.dropdown.Option("instock", "En stock"), ft.dropdown.Option("onbackorder", "Bajo pedido / a medida")]),
+        "stock_quantity": modern_text_field("Cantidad *", "Ej.: 12", ft.Icons.WAREHOUSE_OUTLINED, disabled=True),
         "categories": modern_dropdown(label="Categoría *", hint_text="Elige una categoría", prefix_icon=ft.Icons.CATEGORY_OUTLINED, options=[ft.dropdown.Option(category) for category in app.settings.categories]),
         "ebdlt_pais": modern_text_field("País", "Ej.: España", ft.Icons.PUBLIC),
         "ebdlt_region": modern_text_field("Comunidad o estado", "Ej.: Andalucía", ft.Icons.MAP_OUTLINED),
@@ -42,8 +47,51 @@ def build_single_product_view(app: AppController) -> ft.Control:
     image_path = {"value": ""}
     image_text = ft.Text("No se ha seleccionado ninguna imagen.")
     image_preview = ft.Image(width=120, height=120, fit=ft.ImageFit.CONTAIN, visible=False)
-    product_status = modern_dropdown(label="Publicación", value=app.settings.default_status, prefix_icon=ft.Icons.PUBLISH_OUTLINED, options=[ft.dropdown.Option("draft", "Guardar como borrador"), ft.dropdown.Option("publish", "Publicar ahora")])
+    featured = ft.RadioGroup(
+        content=ft.Row([
+            ft.Radio(value="yes", label="★ Sí"),
+            ft.Radio(value="no", label="No"),
+        ]),
+        value="no",
+    )
+    product_status = ft.RadioGroup(
+        content=ft.Row([
+            ft.Radio(value="draft", label="Guardar como borrador"),
+            ft.Radio(value="publish", label="Publicar ahora"),
+        ]),
+        value=app.settings.default_status,
+    )
+    featured_control = ft.Column([
+        ft.Text("Producto destacado", weight=ft.FontWeight.BOLD, color=PURPLE),
+        featured,
+    ], spacing=2)
+    publication_control = ft.Column([
+        ft.Text("Publicación", weight=ft.FontWeight.BOLD, color=PURPLE),
+        product_status,
+    ], spacing=2)
+    availability = ft.RadioGroup(
+        content=ft.Column([
+            ft.Row([
+                ft.Radio(value=ON_BACKORDER, label="Bajo pedido"),
+                ft.Text("No se controlará una cantidad concreta.", color="#665B5E"),
+            ]),
+            ft.Row([
+                ft.Radio(value=IN_STOCK, label="En stock"),
+                ft.Container(fields["stock_quantity"], width=220),
+            ]),
+        ], spacing=8),
+        value=ON_BACKORDER,
+    )
     service = ProductUploadService(app.create_client)
+
+    def select_availability(event: ft.ControlEvent) -> None:
+        in_stock = event.control.value == IN_STOCK
+        fields["stock_quantity"].disabled = not in_stock
+        if not in_stock:
+            fields["stock_quantity"].value = ""
+        fields["stock_quantity"].update()
+
+    availability.on_change = select_availability
 
     def capitalize_location(event: ft.ControlEvent) -> None:
         event.control.value = capitalize_initial(event.control.value)
@@ -78,6 +126,8 @@ def build_single_product_view(app: AppController) -> ft.Control:
 
     def product_from_fields() -> ProductInput:
         values = {key: control.value or "" for key, control in fields.items()}
+        values["featured"] = featured.value or "no"
+        values.update(inventory_values(availability.value or ON_BACKORDER, fields["stock_quantity"].value or ""))
         values["catalog_visibility"] = "visible"
         return ProductInput(values, Path(image_path["value"]) if image_path["value"] else None)
 
@@ -85,13 +135,20 @@ def build_single_product_view(app: AppController) -> ft.Control:
         app.open_dialog(acknowledgement_dialog("Producto subido correctamente" if success else "No se pudo subir el producto", message, app.close_dialog, error=not success))
 
     def submit(action: DuplicateAction | None = None, existing: dict | None = None, confirmed: bool = False) -> None:
-        validation = validate_product(product_from_fields(), required_fields=REQUIRED_FIELDS)
+        required_fields = REQUIRED_FIELDS + (("stock_quantity",) if availability.value == IN_STOCK else ())
+        validation = validate_product(product_from_fields(), required_fields=required_fields)
+        quantity = validation.product.values.get("stock_quantity", "")
+        if availability.value == IN_STOCK and quantity.replace("-", "", 1).isdigit() and int(quantity) <= 0:
+            validation.errors.append("La cantidad debe ser mayor que cero.")
         if not validation.valid:
             app.open_dialog(acknowledgement_dialog("Faltan campos obligatorios", " ".join(validation.errors), app.close_dialog, error=True))
             return
         product = validation.product
         if not confirmed:
-            summary = [ft.Text(f"{FIELD_LABELS[key]}: {value}") for key, value in product.values.items() if key != "catalog_visibility"]
+            hidden_summary_fields = {"catalog_visibility", "featured", "manage_stock", "stock_status"}
+            summary = [ft.Text(f"{FIELD_LABELS[key]}: {value}") for key, value in product.values.items() if key not in hidden_summary_fields]
+            summary.append(ft.Text(f"Producto destacado: {'Sí' if featured.value == 'yes' else 'No'}"))
+            summary.append(ft.Text(f"Disponibilidad: {'En stock' if availability.value == IN_STOCK else 'Bajo pedido'}"))
             if product.image_path:
                 summary.append(ft.Text(f"Imagen: {product.image_path.name}"))
             summary.append(ft.Text(f"Publicación: {'Publicado' if product_status.value == 'publish' else 'Borrador'}"))
@@ -127,10 +184,16 @@ def build_single_product_view(app: AppController) -> ft.Control:
 
     return ft.Container(content=ft.Column([
         ft.Text("Todos los campos marcados con asterisco (*) son obligatorios.", color="#665B5E"),
-        section("Producto", "Datos principales, contenido y presencia en el catálogo.", [ft.ResponsiveRow([ft.Container(fields["name"], col={"sm": 12, "md": 8}), ft.Container(fields["sku"], col={"sm": 12, "md": 4})]), fields["description"], fields["short_description"], ft.ResponsiveRow([ft.Container(fields["featured"], col={"sm": 12, "md": 6}), ft.Container(product_status, col={"sm": 12, "md": 6})]), ft.Row([primary_button("Elegir imagen", lambda _: app.single_image_picker.pick_files(allow_multiple=False, file_type=ft.FilePickerFileType.CUSTOM, allowed_extensions=["jpg", "jpeg", "png", "webp"]), ft.Icons.IMAGE_OUTLINED), image_text, image_preview])]),
+        section("Producto", "Datos principales, contenido y presencia en el catálogo.", [ft.ResponsiveRow([ft.Container(fields["name"], col={"sm": 12, "md": 8}), ft.Container(fields["sku"], col={"sm": 12, "md": 4})]), fields["description"], fields["short_description"], ft.ResponsiveRow([ft.Container(featured_control, col={"sm": 12, "md": 5}), ft.Container(publication_control, col={"sm": 12, "md": 7})]), ft.Row([primary_button("Elegir imagen", lambda _: app.single_image_picker.pick_files(allow_multiple=False, file_type=ft.FilePickerFileType.CUSTOM, allowed_extensions=["jpg", "jpeg", "png", "webp"]), ft.Icons.IMAGE_OUTLINED), image_text, image_preview])]),
         section("Precio", "Define el precio habitual y, si procede, una oferta.", [ft.ResponsiveRow([ft.Container(fields["regular_price"], col={"sm": 12, "md": 6}), ft.Container(fields["sale_price"], col={"sm": 12, "md": 6})])]),
         section("Organización", "Elige la categoría. Al seleccionar Escudos podrás indicar su ubicación respetando la mayúscula inicial.", [fields["categories"], location_fields, fields["tags"]]),
-        section("Inventario", "Controla existencias, productos bajo pedido y alertas.", [ft.ResponsiveRow([ft.Container(fields["manage_stock"], col={"sm": 12, "md": 4}), ft.Container(fields["stock_quantity"], col={"sm": 12, "md": 4}), ft.Container(fields["stock_status"], col={"sm": 12, "md": 4})])]),
-        section("Envío", "Indica el peso y las dimensiones del producto.", [fields["weight"], ft.ResponsiveRow([ft.Container(fields[key], col={"sm": 4}) for key in ("length", "width", "height")])]),
+        section("Inventario", "Selecciona una única forma de disponibilidad. La cantidad solo se puede editar para productos en stock.", [availability]),
+        section("Envío", "Indica el peso y las dimensiones del producto.", [ft.Row([
+            ft.Container(fields["weight"], expand=1),
+            ft.Container(ft.VerticalDivider(width=24, thickness=1, color="#C8BCC0"), height=56),
+            ft.Container(fields["length"], expand=1),
+            ft.Container(fields["width"], expand=1),
+            ft.Container(fields["height"], expand=1),
+        ], spacing=10)]),
         ft.Row([primary_button("Subir producto", lambda _: submit(), ft.Icons.UPLOAD, height=52)], alignment=ft.MainAxisAlignment.END),
     ], spacing=20, scroll=ft.ScrollMode.AUTO), padding=10)
