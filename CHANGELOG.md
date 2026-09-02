@@ -6,6 +6,8 @@ mantienen en la sección **Sin publicar** hasta preparar una nueva entrega.
 
 ## [Sin publicar]
 
+## [0.2.0] — 2026-09-03
+
 ### Añadido
 
 - Informe Excel de cada subida por lotes en la carpeta Descargas, con resumen,
