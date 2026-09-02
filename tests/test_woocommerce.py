@@ -87,9 +87,9 @@ def test_list_published_products_uses_pagination() -> None:
     products = WooCommerceClient("https://shop.example", "ck", "cs", session=session).list_published_products()
     assert [product["id"] for product in products] == [1, 2, 3]
     assert [call[1]["params"] for call in session.calls] == [
-        {"status": "publish", "per_page": 100, "page": 1},
-        {"status": "publish", "per_page": 100, "page": 2},
-        {"status": "publish", "per_page": 100, "page": 3},
+        {"status": "publish", "per_page": 100, "page": 1, "context": "edit"},
+        {"status": "publish", "per_page": 100, "page": 2, "context": "edit"},
+        {"status": "publish", "per_page": 100, "page": 3, "context": "edit"},
     ]
 
 
@@ -120,7 +120,7 @@ def test_list_published_products_uses_rest_route_fallback() -> None:
         "https://shop.example/index.php?rest_route=/wc/v3/products",
     ]
     assert session.calls[1][1]["params"] == {
-        "status": "publish", "per_page": 100, "page": 1, "consumer_key": "ck", "consumer_secret": "cs"
+        "status": "publish", "per_page": 100, "page": 1, "context": "edit", "consumer_key": "ck", "consumer_secret": "cs"
     }
 
 
@@ -138,4 +138,4 @@ def test_list_published_products_filters_a_single_category() -> None:
 
     assert products == [{"id": 1}]
     assert session.calls[0][1]["params"] == {"search": "Escudos", "per_page": 100, "hide_empty": False}
-    assert session.calls[1][1]["params"] == {"status": "publish", "per_page": 100, "page": 1, "category": 42}
+    assert session.calls[1][1]["params"] == {"status": "publish", "per_page": 100, "page": 1, "context": "edit", "category": 42}

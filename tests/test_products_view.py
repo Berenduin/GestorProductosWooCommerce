@@ -50,3 +50,19 @@ def test_formats_custom_location_taxonomies_from_the_api() -> None:
     assert _taxonomy_values(product, "ebdlt_pais") == "España"
     assert _taxonomy_values(product, "ebdlt_region") == "Comunidad de Madrid"
     assert _taxonomy_values(product, "ebdlt_ciudad") == "—"
+
+
+def test_formats_location_taxonomies_when_woocommerce_returns_metadata_or_attributes() -> None:
+    product = {
+        "meta_data": [
+            {"key": "ebdlt_pais", "value": "España"},
+            {"key": "ebdlt_region", "value": ["Comunidad de Madrid"]},
+        ],
+        "attributes": [
+            {"name": "ebdlt_ciudad", "options": ["Alcalá de Henares"]},
+        ],
+    }
+
+    assert _taxonomy_values(product, "ebdlt_pais") == "España"
+    assert _taxonomy_values(product, "ebdlt_region") == "Comunidad de Madrid"
+    assert _taxonomy_values(product, "ebdlt_ciudad") == "Alcalá de Henares"

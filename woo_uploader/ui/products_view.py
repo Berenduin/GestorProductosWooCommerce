@@ -63,11 +63,43 @@ def _published_date(product: dict[str, Any]) -> str:
 
 
 def _taxonomy_values(product: dict[str, Any], taxonomy: str) -> str:
-    values = product.get(taxonomy, [])
+    """Obtiene una taxonomía propia sin depender de cómo la serialice la API.
+
+    El filtro del plugin de escudos la expone normalmente como una clave de
+    primer nivel. Algunas configuraciones de WooCommerce, sin embargo, la
+    devuelven dentro de ``meta_data`` o de los atributos del producto.
+    """
+    values = product.get(taxonomy)
+    if not values:
+        values = _metadata_value(product, taxonomy)
+    if not values:
+        values = _attribute_options(product, taxonomy)
+    if values is None:
+        values = []
     if not isinstance(values, list):
         values = [values]
     names = [str(value.get("name", "")).strip() if isinstance(value, dict) else str(value).strip() for value in values]
     return ", ".join(name for name in names if name) or "—"
+
+
+def _metadata_value(product: dict[str, Any], key: str) -> Any:
+    metadata = product.get("meta_data", [])
+    if not isinstance(metadata, list):
+        return None
+    for item in metadata:
+        if isinstance(item, dict) and item.get("key") == key:
+            return item.get("value")
+    return None
+
+
+def _attribute_options(product: dict[str, Any], name: str) -> Any:
+    attributes = product.get("attributes", [])
+    if not isinstance(attributes, list):
+        return None
+    for attribute in attributes:
+        if isinstance(attribute, dict) and str(attribute.get("name", "")).casefold() == name.casefold():
+            return attribute.get("options")
+    return None
 
 
 def _table(products: list[dict[str, Any]], show_location: bool = False) -> ft.Control:

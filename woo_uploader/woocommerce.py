@@ -96,7 +96,9 @@ class WooCommerceClient:
         per_page = 100
         category_id = self._category_id(category_name) if category_name else None
         while True:
-            params: dict[str, Any] = {"status": "publish", "per_page": per_page, "page": page}
+            # La vista autenticada incluye campos y metadatos que WooCommerce
+            # omite del contexto público, como las taxonomías de Escudos.
+            params: dict[str, Any] = {"status": "publish", "per_page": per_page, "page": page, "context": "edit"}
             if category_id is not None:
                 params["category"] = category_id
             batch = self._request(
