@@ -22,7 +22,45 @@ def test_find_by_sku_uses_wc_endpoint() -> None:
     client = WooCommerceClient("https://shop.example/", "ck", "cs", session=session)
     assert client.find_by_sku("X")["id"] == 8
     assert session.calls[0][1] == "https://shop.example/wp-json/wc/v3/products"
-    assert session.calls[0][2]["params"]["sku"] == "X"
+    assert session.calls[0][2]["params"] == {
+        "sku": "X",
+        "per_page": 1,
+        "context": "edit",
+        "include_status": "any,trash",
+    }
+
+
+def test_find_by_sku_falls_back_when_include_status_is_not_supported() -> None:
+    class LegacySession:
+        def __init__(self): self.calls = []
+        def request(self, method, url, **kwargs):
+            self.calls.append((url, kwargs))
+            if len(self.calls) == 1:
+                return Response(400, {"message": "Parámetro no válido"})
+            return Response(200, [{"id": 8, "sku": "X"}])
+
+    session = LegacySession()
+    client = WooCommerceClient("https://shop.example", "ck", "cs", session=session)
+
+    assert client.find_by_sku("X")["id"] == 8
+    assert session.calls[1][1]["params"] == {"sku": "X", "per_page": 1}
+
+
+def test_woocommerce_error_keeps_api_error_details() -> None:
+    class ErrorSession:
+        def request(self, method, url, **kwargs):
+            return Response(400, {"code": "product_invalid_sku", "message": "SKU duplicado", "data": {"resource_id": 42}})
+
+    client = WooCommerceClient("https://shop.example", "ck", "cs", session=ErrorSession())
+
+    try:
+        client.create_product({"name": "Duplicado", "sku": "X"})
+    except WooCommerceError as exc:
+        assert exc.code == "product_invalid_sku"
+        assert exc.status_code == 400
+        assert exc.resource_id == 42
+    else:
+        raise AssertionError("Se esperaba WooCommerceError")
 
 
 def test_session_uses_browser_like_user_agent() -> None:
@@ -72,6 +110,54 @@ def test_uses_rest_route_fallback_after_connection_error() -> None:
     client = WooCommerceClient("https://shop.example", "ck", "cs", session=session)
     assert client.test_connection() == "Conexión correcta con WooCommerce 9.0"
     assert session.calls[1] == "https://shop.example/index.php?rest_route=/wc/v3/system_status"
+
+
+def test_wordpress_connection_uses_application_credentials() -> None:
+    class WordPressSession:
+        def __init__(self): self.calls = []
+        def request(self, method, url, **kwargs):
+            self.calls.append((method, url, kwargs))
+            return Response(200, {"name": "Administración", "capabilities": {"upload_files": True}})
+
+    session = WordPressSession()
+    client = WooCommerceClient("https://shop.example", "ck", "cs", "admin", "app-pass", session=session)
+
+    assert client.test_wordpress_connection() == "Conexión correcta con WordPress: Administración"
+    assert session.calls[0][1] == "https://shop.example/wp-json/wp/v2/users/me"
+    assert session.calls[0][2]["auth"] == ("admin", "app-pass")
+    assert session.calls[0][2]["params"] == {"context": "edit"}
+
+
+def test_wordpress_connection_rejects_user_without_upload_permission() -> None:
+    class WordPressSession:
+        def request(self, method, url, **kwargs):
+            return Response(200, {"name": "Suscriptor", "capabilities": {"upload_files": False}})
+
+    client = WooCommerceClient("https://shop.example", "", "", "reader", "app-pass", session=WordPressSession())
+
+    try:
+        client.test_wordpress_connection()
+    except WooCommerceError as exc:
+        assert "no tiene permiso para subir archivos" in str(exc)
+    else:
+        raise AssertionError("Se esperaba WooCommerceError")
+
+
+def test_wordpress_fallback_keeps_basic_authentication() -> None:
+    class FallbackSession:
+        def __init__(self): self.calls = []
+        def request(self, method, url, **kwargs):
+            self.calls.append((url, kwargs))
+            return Response(404, {}) if len(self.calls) == 1 else Response(200, {"name": "Admin"})
+
+    session = FallbackSession()
+    client = WooCommerceClient("https://shop.example", "", "", "admin", "app-pass", session=session)
+
+    assert client.test_wordpress_connection() == "Conexión correcta con WordPress: Admin"
+    assert session.calls[1][0] == "https://shop.example/index.php?rest_route=/wp/v2/users/me"
+    assert session.calls[1][1]["auth"] == ("admin", "app-pass")
+    assert session.calls[1][1]["params"] == {"context": "edit"}
+    assert "consumer_key" not in session.calls[1][1]["params"]
 
 
 def test_list_published_products_uses_pagination() -> None:

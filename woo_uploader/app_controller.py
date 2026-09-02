@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import flet as ft
 
 from .config import Settings, SettingsStore
 from .services.connection import ConnectionService
+from .services.files import open_local_path
 from .ui.bulk_import_view import build_bulk_import_view
 from .ui.help_view import build_help_view
 from .ui.products_view import build_products_view
@@ -63,14 +65,32 @@ class AppController:
     def test_connection(self) -> str:
         return self.connection_service.test_connection(self.settings, self.credentials())
 
+    def test_woocommerce_connection(self, store_url: str, consumer_key: str, consumer_secret: str) -> str:
+        return self.connection_service.test_woocommerce(store_url, consumer_key, consumer_secret)
+
+    def test_wordpress_connection(self, store_url: str, wordpress_user: str, wordpress_password: str) -> str:
+        return self.connection_service.test_wordpress(store_url, wordpress_user, wordpress_password)
+
     def save_connection(self, settings: Settings, consumer_key: str, consumer_secret: str, wordpress_password: str) -> None:
         self.store.save(settings, consumer_key, consumer_secret, wordpress_password)
         self.settings = settings
         self.published_products_cache.clear()
 
+    def save_woocommerce_connection(self, store_url: str, default_status: str, consumer_key: str, consumer_secret: str) -> None:
+        self.settings = Settings(store_url, self.settings.wordpress_user, default_status, self.settings.categories)
+        self.store.save_woocommerce(self.settings, consumer_key, consumer_secret)
+        self.published_products_cache.clear()
+
+    def save_wordpress_connection(self, store_url: str, wordpress_user: str, wordpress_password: str) -> None:
+        self.settings = Settings(store_url, wordpress_user, self.settings.default_status, self.settings.categories)
+        self.store.save_wordpress(self.settings, wordpress_password)
+
     def save_categories(self, categories: list[str]) -> None:
         self.settings = Settings(self.settings.store_url, self.settings.wordpress_user, self.settings.default_status, categories)
         self.store.save_settings(self.settings)
+
+    def open_local_path(self, path: Path) -> None:
+        open_local_path(path)
 
     def notify(self, message: str, error: bool = False) -> None:
         self.status.value = message

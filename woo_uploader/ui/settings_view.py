@@ -4,13 +4,19 @@ from typing import TYPE_CHECKING
 
 import flet as ft
 
-from ..config import Settings
 from ..version import APP_NAME, APP_VERSION
-from .components import modern_dropdown, modern_text_field
+from .components import modern_dropdown, modern_text_field, section
 from .theme import PURPLE, WHITE
 
 if TYPE_CHECKING:
     from ..app_controller import AppController
+
+
+def _show_connection_feedback(page: ft.Page, control: ft.Text, message: str, error: bool = False) -> None:
+    control.value = message
+    control.color = ft.Colors.RED_700 if error else ft.Colors.GREEN_700
+    control.visible = True
+    page.update()
 
 
 def build_settings_view(app: AppController, selected_tab: int = 0) -> list[ft.Control]:
@@ -19,9 +25,11 @@ def build_settings_view(app: AppController, selected_tab: int = 0) -> list[ft.Co
     url = modern_text_field("URL de la tienda", "https://mitienda.es", ft.Icons.LINK_OUTLINED, value=settings.store_url)
     consumer_key = modern_text_field("Consumer Key", "ck_…", ft.Icons.KEY_OUTLINED, value=key, password=True, can_reveal_password=True)
     consumer_secret = modern_text_field("Consumer Secret", "cs_…", ft.Icons.KEY_OUTLINED, value=secret, password=True, can_reveal_password=True)
-    wp_user = modern_text_field("Usuario WordPress (opcional, para imágenes locales)", "Ej.: administrador", ft.Icons.PERSON_OUTLINE, value=settings.wordpress_user)
-    wp_pass = modern_text_field("Contraseña de aplicación WordPress (opcional)", "xxxx xxxx xxxx xxxx", ft.Icons.LOCK_OUTLINE, value=wp_password, password=True, can_reveal_password=True)
+    wp_user = modern_text_field("Usuario de WordPress", "Ej.: administrador", ft.Icons.PERSON_OUTLINE, value=settings.wordpress_user)
+    wp_pass = modern_text_field("Contraseña de aplicación de WordPress", "xxxx xxxx xxxx xxxx", ft.Icons.LOCK_OUTLINE, value=wp_password, password=True, can_reveal_password=True)
     default_status = modern_dropdown(label="Estado predeterminado", value=settings.default_status, prefix_icon=ft.Icons.VISIBILITY_OUTLINED, options=[ft.dropdown.Option("draft", "Borrador"), ft.dropdown.Option("publish", "Publicado")])
+    woo_feedback = ft.Text(visible=False, size=13, selectable=True)
+    wordpress_feedback = ft.Text(visible=False, size=13, selectable=True)
     category_list = ft.Column(spacing=4)
     category_inputs: list[ft.TextField] = []
     new_category = modern_text_field("Nueva categoría", "Ej.: Accesorios", ft.Icons.ADD_CIRCLE_OUTLINE, expand=True)
@@ -79,19 +87,36 @@ def build_settings_view(app: AppController, selected_tab: int = 0) -> list[ft.Co
         save_categories()
         app.page.update()
 
-    def save_connection(_: ft.ControlEvent) -> None:
-        try:
-            app.save_connection(Settings((url.value or "").strip().rstrip("/").removesuffix("/wp-json"), (wp_user.value or "").strip(), default_status.value or "draft", app.settings.categories), (consumer_key.value or "").strip(), (consumer_secret.value or "").strip(), (wp_pass.value or "").strip())
-            app.notify("Conexión guardada. Las claves se han enviado al llavero del sistema.")
-        except Exception as exc:
-            app.notify(f"No se pudo guardar en el llavero: {exc}", True)
+    def normalized_url() -> str:
+        return (url.value or "").strip().rstrip("/").removesuffix("/wp-json")
 
-    def test(_: ft.ControlEvent) -> None:
-        save_connection(_)
+    def save_woocommerce(_: ft.ControlEvent) -> None:
         try:
-            app.notify(app.test_connection())
+            app.save_woocommerce_connection(normalized_url(), default_status.value or "draft", (consumer_key.value or "").strip(), (consumer_secret.value or "").strip())
+            _show_connection_feedback(app.page, woo_feedback, "Conexión de WooCommerce guardada. Las claves se han enviado al llavero del sistema.")
         except Exception as exc:
-            app.notify(str(exc), True)
+            _show_connection_feedback(app.page, woo_feedback, f"No se pudo guardar la conexión de WooCommerce: {exc}", True)
+
+    def test_woocommerce(_: ft.ControlEvent) -> None:
+        _show_connection_feedback(app.page, woo_feedback, "Comprobando la conexión con WooCommerce…")
+        try:
+            _show_connection_feedback(app.page, woo_feedback, app.test_woocommerce_connection(normalized_url(), (consumer_key.value or "").strip(), (consumer_secret.value or "").strip()))
+        except Exception as exc:
+            _show_connection_feedback(app.page, woo_feedback, str(exc), True)
+
+    def save_wordpress(_: ft.ControlEvent) -> None:
+        try:
+            app.save_wordpress_connection(normalized_url(), (wp_user.value or "").strip(), (wp_pass.value or "").strip())
+            _show_connection_feedback(app.page, wordpress_feedback, "Conexión de WordPress guardada. La contraseña se ha enviado al llavero del sistema.")
+        except Exception as exc:
+            _show_connection_feedback(app.page, wordpress_feedback, f"No se pudo guardar la conexión de WordPress: {exc}", True)
+
+    def test_wordpress(_: ft.ControlEvent) -> None:
+        _show_connection_feedback(app.page, wordpress_feedback, "Comprobando la conexión con WordPress…")
+        try:
+            _show_connection_feedback(app.page, wordpress_feedback, app.test_wordpress_connection(normalized_url(), (wp_user.value or "").strip(), (wp_pass.value or "").strip()))
+        except Exception as exc:
+            _show_connection_feedback(app.page, wordpress_feedback, str(exc), True)
 
     categories_tab = ft.Column([
         ft.Text("Categorías de productos", size=20, weight=ft.FontWeight.BOLD, color=PURPLE),
@@ -100,10 +125,23 @@ def build_settings_view(app: AppController, selected_tab: int = 0) -> list[ft.Co
         category_list,
     ], scroll=ft.ScrollMode.AUTO)
     connection_tab = ft.Column([
-        ft.Text("Conexión con WooCommerce", size=20, weight=ft.FontWeight.BOLD, color=PURPLE),
-        ft.Text("Las claves se almacenan en el llavero del sistema, no en el archivo de configuración."),
-        url, consumer_key, consumer_secret, wp_user, wp_pass, default_status,
-        ft.Row([ft.ElevatedButton("Guardar conexión", on_click=save_connection), ft.OutlinedButton("Probar conexión", on_click=test)]),
+        ft.Text("Conexiones con la tienda", size=20, weight=ft.FontWeight.BOLD, color=PURPLE),
+        ft.Text("WooCommerce gestiona los productos y WordPress recibe las imágenes. Sus credenciales se guardan y se comprueban por separado."),
+        url,
+        section("API de WooCommerce · Productos", "Utiliza la Consumer Key y la Consumer Secret creadas en WooCommerce.", [
+            consumer_key,
+            consumer_secret,
+            default_status,
+            ft.Row([ft.ElevatedButton("Guardar WooCommerce", icon=ft.Icons.SAVE_OUTLINED, on_click=save_woocommerce), ft.OutlinedButton("Probar WooCommerce", icon=ft.Icons.CHECK_CIRCLE_OUTLINE, on_click=test_woocommerce)], wrap=True),
+            woo_feedback,
+        ]),
+        section("API de WordPress · Imágenes", "Utiliza un usuario de WordPress y su contraseña de aplicación. No introduzcas aquí la contraseña normal de acceso.", [
+            wp_user,
+            wp_pass,
+            ft.Row([ft.ElevatedButton("Guardar WordPress", icon=ft.Icons.SAVE_OUTLINED, on_click=save_wordpress), ft.OutlinedButton("Probar WordPress", icon=ft.Icons.CHECK_CIRCLE_OUTLINE, on_click=test_wordpress)], wrap=True),
+            wordpress_feedback,
+        ]),
+        ft.Text("Los datos sensibles se almacenan en el llavero del sistema, no en el archivo de configuración.", size=12, color="#665B5E"),
     ], scroll=ft.ScrollMode.AUTO)
     updates_tab = ft.Column([
         ft.Text("Actualizaciones", size=20, weight=ft.FontWeight.BOLD, color=PURPLE),

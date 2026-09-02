@@ -66,6 +66,13 @@ class BatchUploadResult:
 ClientFactory = Callable[[], ProductGateway]
 
 
+def is_duplicate_sku_error(exc: WooCommerceError) -> bool:
+    message = str(exc).casefold()
+    return exc.code == "product_invalid_sku" or (
+        "sku" in message and any(fragment in message for fragment in ("duplic", "ya está", "already present", "already exists"))
+    )
+
+
 class ProductUploadService:
     """Encapsula la detección de duplicados y la operación de un producto."""
 
@@ -93,6 +100,7 @@ class ProductUploadService:
         try:
             payload = to_woo_payload(product, status)
             if existing:
+                payload.pop("sku", None)
                 remote = client.update_product(existing["id"], payload, product.image_path)
                 return ProductUploadResult(product, "updated", remote)
             remote = client.create_product(payload, product.image_path)
@@ -150,13 +158,28 @@ class BatchUploadService:
                 else:
                     payload = to_woo_payload(product, status)
                     if conflict:
+                        payload.pop("sku", None)
                         client.update_product(conflict.existing_product["id"], payload, product.image_path)
                         outcome = "updated"
                     else:
                         client.create_product(payload, product.image_path)
                         outcome = "created"
                     output.rows.append(BatchRowResult(row_number, sku, outcome))
-            except (ValueError, WooCommerceError) as exc:
+            except WooCommerceError as exc:
+                if is_duplicate_sku_error(exc) and sku:
+                    existing = client.find_by_sku(sku)
+                    if existing:
+                        output.rows.append(BatchRowResult(row_number, sku, "skipped", "SKU existente detectado durante la subida"))
+                    else:
+                        output.rows.append(BatchRowResult(
+                            row_number,
+                            sku,
+                            "failed",
+                            "WooCommerce conserva este SKU en su tabla interna, pero no devuelve ningún producto. Revise la papelera de productos o regenere la tabla de búsqueda de WooCommerce.",
+                        ))
+                else:
+                    output.rows.append(BatchRowResult(row_number, sku, "failed", str(exc)))
+            except ValueError as exc:
                 output.rows.append(BatchRowResult(row_number, sku, "failed", str(exc)))
             if on_progress:
                 on_progress(index, total)

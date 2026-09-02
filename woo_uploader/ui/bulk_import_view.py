@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import flet as ft
 
 from ..excel_import import Spreadsheet, build_products, infer_mapping, read_spreadsheet
-from ..services.reports import write_batch_report
+from ..services.reports import BatchReportPaths, write_batch_reports
 from ..services.uploads import BatchUploadResult, BatchUploadService, DuplicateAction, SkuConflict
 from .components import acknowledgement_dialog, modern_dropdown, primary_button
 from .theme import GOLD, PURPLE
@@ -81,24 +81,44 @@ def build_bulk_import_view(app: AppController) -> ft.Control:
     app.batch_excel_picker.on_result = select_excel
     app.batch_directory_picker.on_result = select_directory
 
-    def show_summary(result: BatchUploadResult, report_path: Path) -> None:
+    def open_report_path(path: Path) -> None:
+        try:
+            app.open_local_path(path)
+        except Exception as exc:
+            app.notify(f"No se pudo abrir el informe: {exc}", True)
+
+    def show_summary(result: BatchUploadResult, reports: BatchReportPaths) -> None:
         counts = result.counts
         summary = f"{counts['created']} creados, {counts['updated']} actualizados, {counts['skipped']} omitidos y {counts['failed']} fallidos."
         title, color = ("Subida del lote cancelada", GOLD) if result.cancelled else ("Subida del lote terminada con errores", ft.Colors.RED_700) if counts["failed"] else ("Lote subido correctamente", PURPLE)
-        app.notify(f"{title}: {summary} Informe: {report_path}", counts["failed"] > 0)
-        details: list[ft.Control] = [ft.Text(summary), ft.Text(f"Informe detallado: {report_path}")]
+        app.notify(f"{title}: {summary} Informe Excel disponible en {reports.xlsx}", counts["failed"] > 0)
+        details: list[ft.Control] = [
+            ft.Text("El proceso de importación ha terminado.", weight=ft.FontWeight.BOLD),
+            ft.Text(summary),
+            ft.Text("Se ha generado un informe Excel con el resumen y el detalle de cada producto."),
+            ft.Text(str(reports.xlsx), selectable=True, color="#665B5E"),
+        ]
         if result.failures:
             details.extend([ft.Text("Errores detectados:", weight=ft.FontWeight.BOLD), *[ft.Text(error) for error in result.failures[:5]]])
             if len(result.failures) > 5:
                 details.append(ft.Text(f"Y {len(result.failures) - 5} errores más en el informe."))
-        app.open_dialog(ft.AlertDialog(modal=True, title=ft.Text(title, color=color), content=ft.Container(ft.Column(details, tight=True, scroll=ft.ScrollMode.AUTO), width=620, height=min(400, 110 + 42 * len(details))), actions=[ft.ElevatedButton("Entendido", on_click=lambda _: app.close_dialog())]))
+        app.open_dialog(ft.AlertDialog(
+            modal=True,
+            title=ft.Text(title, color=color),
+            content=ft.Container(ft.Column(details, tight=True, scroll=ft.ScrollMode.AUTO), width=680, height=min(440, 120 + 42 * len(details))),
+            actions=[
+                ft.OutlinedButton("Abrir carpeta", icon=ft.Icons.FOLDER_OPEN, on_click=lambda _: open_report_path(reports.xlsx.parent)),
+                ft.ElevatedButton("Abrir informe Excel", icon=ft.Icons.TABLE_VIEW_OUTLINED, on_click=lambda _: open_report_path(reports.xlsx)),
+                ft.TextButton("Cerrar", on_click=lambda _: app.close_dialog()),
+            ],
+        ))
 
     def perform_import(results, conflicts: dict[int, SkuConflict], decisions: dict[int, DuplicateAction]) -> None:
         state.cancelled = False
         app.begin_upload("Preparando la subida del lote…", show_progress=True)
         try:
             result = service.upload(results, import_status.value or "draft", decisions, conflicts, on_progress=app.update_upload_progress, is_cancelled=lambda: state.cancelled)
-            show_summary(result, write_batch_report(result))
+            show_summary(result, write_batch_reports(result))
         except Exception as exc:
             app.notify(str(exc), True)
             app.open_dialog(acknowledgement_dialog("No se pudo iniciar la subida del lote", str(exc), app.close_dialog, error=True))
@@ -127,7 +147,8 @@ def build_bulk_import_view(app: AppController) -> ft.Control:
         for row_number, conflict in conflicts.items():
             control = modern_dropdown(value="skip", width=160, options=[ft.dropdown.Option("skip", "Omitir"), ft.dropdown.Option("update", "Actualizar")])
             choices[row_number] = control
-            rows.append(ft.Row([ft.Text(f"Fila {row_number} — SKU {conflict.product.values.get('sku', '')} — producto #{conflict.existing_product['id']}", expand=True), control]))
+            location = " (en la papelera)" if conflict.existing_product.get("status") == "trash" else ""
+            rows.append(ft.Row([ft.Text(f"Fila {row_number} — SKU {conflict.product.values.get('sku', '')} — producto #{conflict.existing_product['id']}{location}", expand=True), control]))
         def confirm(_: ft.ControlEvent) -> None:
             app.close_dialog()
             perform_import(results, conflicts, {row: DuplicateAction(control.value or "skip") for row, control in choices.items()})

@@ -7,7 +7,11 @@ import requests
 
 
 class WooCommerceError(RuntimeError):
-    pass
+    def __init__(self, message: str, code: str = "", status_code: int | None = None, resource_id: int | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.status_code = status_code
+        self.resource_id = resource_id
 
 
 class WooCommerceClient:
@@ -16,7 +20,8 @@ class WooCommerceClient:
         if self.base_url.endswith("/wp-json"):
             self.base_url = self.base_url.removesuffix("/wp-json")
         self.auth = (consumer_key, consumer_secret)
-        self.media_auth = (wordpress_user, wordpress_password) if wordpress_user and wordpress_password else self.auth
+        self.has_wordpress_credentials = bool(wordpress_user and wordpress_password)
+        self.media_auth = (wordpress_user, wordpress_password) if self.has_wordpress_credentials else self.auth
         self.session = session or requests.Session()
         if hasattr(self.session, "headers"):
             self.session.headers.update({
@@ -30,7 +35,7 @@ class WooCommerceClient:
         route = path.removeprefix("/wp-json")
         return f"{self.base_url}/index.php?rest_route={route}"
 
-    def _send(self, method: str, path: str, auth: tuple[str, str], **kwargs: Any) -> requests.Response:
+    def _send(self, method: str, path: str, auth: tuple[str, str], *, fallback_auth_in_query: bool = True, **kwargs: Any) -> requests.Response:
         timeout = kwargs.pop("timeout", 30)
         try:
             response = self.session.request(method, self._url(path), auth=auth, timeout=timeout, **kwargs)
@@ -44,9 +49,12 @@ class WooCommerceClient:
             if data is not None and hasattr(data, "seek"):
                 data.seek(0)
             fallback_kwargs = dict(kwargs)
-            fallback_params = dict(fallback_kwargs.get("params") or {})
-            fallback_params.update({"consumer_key": auth[0], "consumer_secret": auth[1]})
-            fallback_kwargs["params"] = fallback_params
+            if fallback_auth_in_query:
+                fallback_params = dict(fallback_kwargs.get("params") or {})
+                fallback_params.update({"consumer_key": auth[0], "consumer_secret": auth[1]})
+                fallback_kwargs["params"] = fallback_params
+            else:
+                fallback_kwargs["auth"] = auth
             try:
                 response = self.session.request(method, self._url(path, fallback=True), timeout=timeout, **fallback_kwargs)
             except requests.RequestException as exc:
@@ -61,21 +69,59 @@ class WooCommerceClient:
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         response = self._send(method, path, self.auth, **kwargs)
         if not response.ok:
+            code = ""
+            resource_id = None
+            try:
+                error_data = response.json()
+                if isinstance(error_data, dict):
+                    message = error_data.get("message", response.text)
+                    code = str(error_data.get("code", ""))
+                    details = error_data.get("data") or {}
+                    resource_id = details.get("resource_id") if isinstance(details, dict) else None
+                else:
+                    message = response.text
+            except ValueError:
+                message = response.text
+            raise WooCommerceError(
+                f"WooCommerce respondió {response.status_code}: {message}",
+                code=code,
+                status_code=response.status_code,
+                resource_id=resource_id,
+            )
+        return response.json()
+
+    def _wordpress_request(self, method: str, path: str, **kwargs: Any) -> Any:
+        response = self._send(method, path, self.media_auth, fallback_auth_in_query=False, **kwargs)
+        if not response.ok:
             try:
                 message = response.json().get("message", response.text)
             except ValueError:
                 message = response.text
-            raise WooCommerceError(f"WooCommerce respondió {response.status_code}: {message}")
+            raise WooCommerceError(f"WordPress respondió {response.status_code}: {message}")
         return response.json()
 
     def test_connection(self) -> str:
         data = self._request("GET", "/wp-json/wc/v3/system_status")
         return f"Conexión correcta con WooCommerce {data.get('environment', {}).get('version', '')}".strip()
 
+    def test_wordpress_connection(self) -> str:
+        data = self._wordpress_request("GET", "/wp-json/wp/v2/users/me", params={"context": "edit"})
+        capabilities = data.get("capabilities") or {}
+        if capabilities and not capabilities.get("upload_files", False):
+            raise WooCommerceError("La conexión con WordPress es correcta, pero el usuario no tiene permiso para subir archivos.")
+        identity = data.get("name") or data.get("slug") or data.get("username") or ""
+        return f"Conexión correcta con WordPress{f': {identity}' if identity else ''}"
+
     def find_by_sku(self, sku: str) -> dict[str, Any] | None:
         if not sku:
             return None
-        products = self._request("GET", "/wp-json/wc/v3/products", params={"sku": sku, "per_page": 1})
+        params = {"sku": sku, "per_page": 1, "context": "edit", "include_status": "any,trash"}
+        try:
+            products = self._request("GET", "/wp-json/wc/v3/products", params=params)
+        except WooCommerceError as exc:
+            if exc.status_code != 400:
+                raise
+            products = self._request("GET", "/wp-json/wc/v3/products", params={"sku": sku, "per_page": 1})
         return products[0] if products else None
 
     def _category_id(self, category_name: str) -> int:
@@ -115,7 +161,15 @@ class WooCommerceClient:
         headers = {"Content-Disposition": f'attachment; filename="{path.name}"', "Content-Type": "application/octet-stream"}
         try:
             with path.open("rb") as image:
-                response = self._send("POST", "/wp-json/wp/v2/media", self.media_auth, data=image, headers=headers, timeout=60)
+                response = self._send(
+                    "POST",
+                    "/wp-json/wp/v2/media",
+                    self.media_auth,
+                    fallback_auth_in_query=not self.has_wordpress_credentials,
+                    data=image,
+                    headers=headers,
+                    timeout=60,
+                )
         except (OSError, requests.RequestException) as exc:
             raise WooCommerceError(f"No se pudo subir la imagen: {exc}") from exc
         if not response.ok:

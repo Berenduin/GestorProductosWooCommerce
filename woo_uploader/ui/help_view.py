@@ -59,7 +59,7 @@ def build_help_view(app: AppController) -> list[ft.Control]:
             _guide_step("1", "Prepara el Excel", "Guarda el archivo como .xlsx. La primera fila debe contener las cabeceras; cada fila posterior es un producto."),
             _guide_step("2", "Revisa la validación", "Después de seleccionar el Excel, comprueba la tabla. Corrige las filas marcadas como «Revisar» antes de subir."),
             _guide_step("3", "Asocia fotos, si quieres", "Elige la carpeta de imágenes y después la columna que contiene el nombre del archivo. Los nombres deben coincidir."),
-            _guide_step("4", "Valida y sube", "Para cada SKU ya existente podrás decidir entre actualizar u omitir. Al finalizar se creará el informe resultado_subida_lote.csv."),
+            _guide_step("4", "Valida y sube", "Para cada SKU ya existente podrás decidir entre actualizar u omitir. Al finalizar se guardará un informe Excel en Descargas y podrás abrirlo desde el mensaje final."),
             primary_button("Ir a subir por lote", lambda _: app.set_view("upload", upload_tab=1), ft.Icons.CLOUD_UPLOAD_OUTLINED),
         ]),
         section("Categorías", "Gestiona las categorías que aparecerán al crear un producto.", [
@@ -69,7 +69,7 @@ def build_help_view(app: AppController) -> list[ft.Control]:
         ]),
         section("Conexión", "Configura cómo se comunica la aplicación con WooCommerce.", [
             _info_item(ft.Icons.VISIBILITY_OUTLINED, "Estado predeterminado", "«Borrador» permite revisar los productos antes de publicarlos; «Publicado» los hace visibles inmediatamente."),
-            _info_item(ft.Icons.CHECK_CIRCLE_OUTLINE, "Probar conexión", "Después de guardar los datos, usa este botón para comprobar que la tienda acepta la conexión."),
+            _info_item(ft.Icons.CHECK_CIRCLE_OUTLINE, "Pruebas independientes", "Comprueba por separado las claves de WooCommerce para productos y las credenciales de WordPress para imágenes. Probar no guarda los datos."),
             primary_button("Ir a conexión", lambda _: app.set_view("settings", settings_tab=1), ft.Icons.SETTINGS),
         ]),
         section("Crear las claves de conexión", "Sigue estos pasos si todavía no dispones de Consumer Key y Consumer Secret.", [

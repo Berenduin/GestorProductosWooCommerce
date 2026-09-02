@@ -8,6 +8,10 @@ mantienen en la sección **Sin publicar** hasta preparar una nueva entrega.
 
 ### Añadido
 
+- Informe Excel de cada subida por lotes en la carpeta Descargas, con resumen,
+  detalle y acceso directo desde el diálogo final.
+- Controles independientes para guardar y probar las conexiones de WooCommerce
+  (productos) y WordPress (imágenes).
 - Consulta de productos publicados organizada por las categorías configuradas.
 - Columnas de País, Comunidad o estado y Ciudad en la tabla de productos de la
   categoría Escudos.
@@ -33,6 +37,14 @@ mantienen en la sección **Sin publicar** hasta preparar una nueva entrega.
   peso en kilogramos y las dimensiones en centímetros.
 - Se han ampliado las pruebas del modelo, la importación Excel, los servicios de
   subida y la construcción del formulario individual.
+
+### Corregido
+
+- La carga por lotes detecta también SKU pertenecientes a productos en la
+  papelera, evita reenviar el mismo SKU al actualizar y trata de forma segura
+  los duplicados descubiertos durante la subida.
+- El formulario individual se limpia y recupera sus valores predeterminados
+  después de crear o actualizar correctamente un producto.
 
 ## [0.1.0] — 2026-08-28
 

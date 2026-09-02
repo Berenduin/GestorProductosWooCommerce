@@ -50,6 +50,17 @@ class SettingsStore:
         self._set_secret("consumer_secret", consumer_secret)
         self._set_secret("wordpress_password", wordpress_password)
 
+    def save_woocommerce(self, settings: Settings, consumer_key: str, consumer_secret: str) -> None:
+        """Guarda solo la configuración y los secretos de WooCommerce."""
+        self.save_settings(settings)
+        self._set_secret("consumer_key", consumer_key)
+        self._set_secret("consumer_secret", consumer_secret)
+
+    def save_wordpress(self, settings: Settings, wordpress_password: str) -> None:
+        """Guarda solo la configuración y el secreto de WordPress."""
+        self.save_settings(settings)
+        self._set_secret("wordpress_password", wordpress_password)
+
     def save_settings(self, settings: Settings) -> None:
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(asdict(settings), indent=2, ensure_ascii=False), encoding="utf-8")

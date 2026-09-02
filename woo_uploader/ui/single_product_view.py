@@ -25,6 +25,33 @@ def inventory_values(availability: str, quantity: str) -> dict[str, str]:
     return {"manage_stock": "no", "stock_status": ON_BACKORDER, "stock_quantity": ""}
 
 
+def reset_product_form(
+    page: ft.Page,
+    fields: dict[str, ft.Control],
+    featured: ft.RadioGroup,
+    product_status: ft.RadioGroup,
+    availability: ft.RadioGroup,
+    image_path: dict[str, str],
+    image_text: ft.Text,
+    image_preview: ft.Image,
+    location_fields: ft.ResponsiveRow,
+    default_status: str,
+) -> None:
+    """Devuelve el formulario a su estado inicial tras una subida correcta."""
+    for control in fields.values():
+        control.value = ""
+    fields["stock_quantity"].disabled = True
+    featured.value = "no"
+    product_status.value = default_status
+    availability.value = ON_BACKORDER
+    image_path["value"] = ""
+    image_text.value = "No se ha seleccionado ninguna imagen."
+    image_preview.src = None
+    image_preview.visible = False
+    location_fields.visible = False
+    page.update()
+
+
 def build_single_product_view(app: AppController) -> ft.Control:
     fields = {
         "name": modern_text_field("Nombre *", "Ej.: Bandurria artesanal", ft.Icons.INVENTORY_2_OUTLINED),
@@ -176,6 +203,18 @@ def build_single_product_view(app: AppController) -> ft.Control:
             if remote_product is None:
                 raise RuntimeError("La subida terminó sin devolver los datos del producto.")
             message = f"Producto #{remote_product['id']} {'actualizado' if result.outcome == 'updated' else 'creado'} correctamente."
+            reset_product_form(
+                app.page,
+                fields,
+                featured,
+                product_status,
+                availability,
+                image_path,
+                image_text,
+                image_preview,
+                location_fields,
+                app.settings.default_status,
+            )
             app.notify(message)
             show_result(True, message)
         except Exception as exc:
